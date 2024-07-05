@@ -1,40 +1,42 @@
 from collections import defaultdict
 from typing import Any
 
+from django.db.models import Q
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from projects.models import Project, ProjectUserPermission
 from users.serializers import UserPublicSerializer
-from django.db.models import Q
 
 
-class TagSerializer(serializers.ModelSerializer):
+class ProjectBaseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
-        fields = ("id", "name", "slug")
+        fields = ("type", "id", "name", "slug")
 
 
-class CategorySerializer(serializers.ModelSerializer):
+class TagSerializer(ProjectBaseSerializer):
     class Meta:
         model = Project
-        fields = ("id", "name", "slug", "description")
+        fields = ProjectBaseSerializer.Meta.fields
 
 
-class TopicSerializer(serializers.ModelSerializer):
+class CategorySerializer(ProjectBaseSerializer):
     class Meta:
         model = Project
-        fields = ("id", "name", "slug", "emoji", "section")
+        fields = ProjectBaseSerializer.Meta.fields + ("description", )
 
 
-class MiniTournamentSerializer(serializers.ModelSerializer):
+class TopicSerializer(ProjectBaseSerializer):
     class Meta:
         model = Project
-        fields = (
-            "id",
-            "type",
-            "name",
-            "slug",
+        fields = ProjectBaseSerializer.Meta.fields + ("emoji", "section")
+
+
+class MiniTournamentSerializer(ProjectBaseSerializer):
+    class Meta:
+        model = Project
+        fields = ProjectBaseSerializer.Meta.fields + (
             "prize_pool",
             "start_date",
             "close_date",
@@ -46,14 +48,10 @@ class MiniTournamentSerializer(serializers.ModelSerializer):
         )
 
 
-class TournamentSerializer(serializers.ModelSerializer):
+class TournamentSerializer(ProjectBaseSerializer):
     class Meta:
         model = Project
-        fields = (
-            "id",
-            "type",
-            "name",
-            "slug",
+        fields = ProjectBaseSerializer.Meta.fields + (
             "subtitle",
             "description",
             "header_image",
@@ -69,25 +67,29 @@ class TournamentSerializer(serializers.ModelSerializer):
         )
 
 
+def serialize_project(project: Project) -> dict:
+    match project.type:
+        case Project.ProjectTypes.TAG:
+            serializer = TagSerializer
+        case Project.ProjectTypes.TOPIC:
+            serializer = TopicSerializer
+        case Project.ProjectTypes.CATEGORY:
+            serializer = CategorySerializer
+        case Project.ProjectTypes.TOURNAMENT:
+            serializer = MiniTournamentSerializer
+        case Project.ProjectTypes.QUESTION_SERIES:
+            serializer = MiniTournamentSerializer
+        case _:
+            serializer = ProjectBaseSerializer
+
+    return serializer(project).data
+
+
 def serialize_projects(projects: list[Project]) -> defaultdict[Any, list]:
     data = defaultdict(list)
 
     for obj in projects:
-        match obj.type:
-            case obj.ProjectTypes.TAG:
-                serializer = TagSerializer
-            case obj.ProjectTypes.TOPIC:
-                serializer = TopicSerializer
-            case obj.ProjectTypes.CATEGORY:
-                serializer = CategorySerializer
-            case obj.ProjectTypes.TOURNAMENT:
-                serializer = MiniTournamentSerializer
-            case obj.ProjectTypes.QUESTION_SERIES:
-                serializer = MiniTournamentSerializer
-            case _:
-                continue
-
-        data[obj.type].append(serializer(obj).data)
+        data[obj.type].append(serialize_project(obj))
 
     return data
 
@@ -159,3 +161,10 @@ class ProjectUserSerializer(serializers.ModelSerializer):
             "user",
             "permission",
         )
+
+
+class ProjectFilterSerializer(serializers.Serializer):
+    ids = serializers.ListField(child=serializers.IntegerField(), required=False)
+    types = serializers.MultipleChoiceField(
+        choices=Project.ProjectTypes.choices, required=False
+    )

@@ -5,12 +5,20 @@ from projects.permissions import ObjectPermission
 from users.models import User
 
 
-def get_projects_qs(user: User = None):
+def get_projects_qs(user: User = None, types: list[Project.ProjectTypes] = None):
     """
     Returns available projects for the user
     """
 
-    return Project.objects.filter_active().filter_permission(user=user)
+    qs = Project.objects.filter_active()
+
+    # Permissions filtering
+    qs = qs.filter_permission(user=user)
+
+    if types:
+        qs = qs.filter(type__in=types)
+
+    return qs
 
 
 def get_site_main_project():

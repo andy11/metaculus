@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
 from typing import Callable
 
 from django.db.models import QuerySet
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.generics import get_object_or_404
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -17,6 +17,8 @@ from projects.serializers import (
     TournamentSerializer,
     TagSerializer,
     ProjectUserSerializer,
+    ProjectFilterSerializer,
+    serialize_projects,
 )
 from projects.services import (
     get_projects_qs,
@@ -26,6 +28,23 @@ from projects.services import (
 from scoring.serializers import LeaderboardSerializer
 from scoring.utils import create_leaderboard_entries
 from users.services import get_users_by_usernames
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def projects_list_api_view(request):
+    paginator = LimitOffsetPagination()
+
+    # Apply filtering
+    filters_serializer = ProjectFilterSerializer(data=request.query_params)
+    filters_serializer.is_valid(raise_exception=True)
+
+    qs = get_projects_qs(user=request.user, **filters_serializer.validated_data)
+    projects = paginator.paginate_queryset(qs, request)
+
+    data = serialize_projects(projects)
+
+    return paginator.get_paginated_response(data)
 
 
 @api_view(["GET"])

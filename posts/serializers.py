@@ -112,6 +112,7 @@ class PostFilterSerializer(serializers.Serializer):
         RESOLVED_AT = "resolved_at"
         CREATED_AT = "created_at"
 
+    # TODO: deprecate this. Was entirely replaced with permissions
     class Access(models.TextChoices):
         PRIVATE = "private"
         PUBLIC = "public"
